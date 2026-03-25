@@ -16,14 +16,6 @@ class Reload(Exception):
         self.session_id = session_id
 
 
-class SwitchToWeb(Exception):
-    """Switch to web interface."""
-
-    def __init__(self, session_id: str | None = None):
-        super().__init__("switch_to_web")
-        self.session_id = session_id
-
-
 cli = typer.Typer(
     cls=LazySubcommandGroup,
     epilog="""\b\
@@ -579,9 +571,6 @@ def kimi(
                 if e.session_id is None:
                     raise Reload(session_id=session.id) from e
                 raise
-            except SwitchToWeb:
-                preserve_background_tasks = True
-                raise
             finally:
                 if not preserve_background_tasks:
                     instance.shutdown_background_tasks()
@@ -619,11 +608,7 @@ def kimi(
 
         save_metadata(metadata)
 
-    async def _reload_loop(session_id: str | None) -> bool:
-        """
-        Returns:
-            True if should switch to web interface, False otherwise.
-        """
+    async def _reload_loop(session_id: str | None) -> None:
         while True:
             try:
                 last_session, succeeded = await _run(session_id)
@@ -631,17 +616,10 @@ def kimi(
             except Reload as e:
                 session_id = e.session_id
                 continue
-            except SwitchToWeb as e:
-                if e.session_id is not None:
-                    session = await Session.find(work_dir, e.session_id)
-                    if session is not None:
-                        await _post_run(session, True)
-                return True
         await _post_run(last_session, succeeded)
-        return False
 
     try:
-        switch_to_web = asyncio.run(_reload_loop(session_id))
+        asyncio.run(_reload_loop(session_id))
     except (typer.BadParameter, typer.Exit):
         # Let Typer/Click format these errors (rich panel + correct exit code).
         raise
@@ -665,24 +643,6 @@ def kimi(
             # In non-debug mode, print a concise error and point users to logs.
             _emit_fatal_error(f"{exc}\nSee logs: {log_path}")
         raise typer.Exit(code=1) from exc
-    if switch_to_web:
-        from kimi_cli.utils.logging import restore_stderr
-
-        restore_stderr()
-
-        # Restore default SIGINT handler and terminal state after the shell's
-        # asyncio.run() to ensure Ctrl+C works in the uvicorn web server.
-        import signal
-
-        signal.signal(signal.SIGINT, signal.default_int_handler)
-
-        from kimi_cli.utils.term import ensure_tty_sane
-
-        ensure_tty_sane()
-
-        from kimi_cli.web.app import run_web_server
-
-        run_web_server(open_browser=True)
 
 
 @cli.command()
@@ -832,28 +792,6 @@ def background_task_worker(
             kill_grace_period_ms=kill_grace_period_ms,
         )
     )
-
-
-@cli.command(name="__web-worker", hidden=True)
-def web_worker(session_id: str) -> None:
-    """Run web worker subprocess (internal)."""
-    import asyncio
-    from uuid import UUID
-
-    from kimi_cli.utils.proctitle import set_process_title
-
-    set_process_title("kimi-code-worker")
-
-    from kimi_cli.app import enable_logging
-    from kimi_cli.web.runner.worker import run_worker
-
-    try:
-        parsed_session_id = UUID(session_id)
-    except ValueError as exc:
-        raise typer.BadParameter(f"Invalid session ID: {session_id}") from exc
-
-    enable_logging(debug=False)
-    asyncio.run(run_worker(parsed_session_id))
 
 
 if __name__ == "__main__":

@@ -544,7 +544,7 @@ class Shell:
             remove_sigint()
 
     async def _run_slash_command(self, command_call: SlashCommandCall) -> None:
-        from kimi_cli.cli import Reload, SwitchToWeb
+        from kimi_cli.cli import Reload
 
         if command_call.name not in self._available_slash_commands:
             logger.info("Unknown slash command /{command}", command=command_call.name)
@@ -570,8 +570,7 @@ class Shell:
             ret = command.func(self, command_call.args)
             if isinstance(ret, Awaitable):
                 await ret
-        except (Reload, SwitchToWeb):
-            # just propagate
+        except Reload:
             raise
         except (asyncio.CancelledError, KeyboardInterrupt):
             # Handle Ctrl-C during slash command execution, return to shell prompt
@@ -843,9 +842,11 @@ class Shell:
                 current_request,
                 on_response=self._handle_prompt_approval_response,
                 buffer_text_provider=(
-                    lambda: self._prompt_session._session.default_buffer.text  # pyright: ignore[reportPrivateUsage]
-                    if self._prompt_session is not None
-                    else ""
+                    lambda: (
+                        self._prompt_session._session.default_buffer.text  # pyright: ignore[reportPrivateUsage]
+                        if self._prompt_session is not None
+                        else ""
+                    )
                 ),
             )
             self._prompt_session.attach_modal(self._approval_modal)

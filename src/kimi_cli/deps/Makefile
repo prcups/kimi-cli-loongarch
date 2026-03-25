@@ -27,7 +27,9 @@ else ifeq ($(OS),Linux)
     RG_TARGET := aarch64-unknown-linux-gnu
   else ifeq ($(ARCH),armv7l)
     RG_TARGET := arm-unknown-linux-gnueabihf
-  else
+  else ifeq ($(ARCH),loongarch64)
+    RG_TARGET := loongarch64-unknown-linux-gnu
+ else
     $(error Unsupported Linux architecture: $(ARCH))
   endif
 else ifneq (,$(filter MSYS% MINGW%,$(OS)))

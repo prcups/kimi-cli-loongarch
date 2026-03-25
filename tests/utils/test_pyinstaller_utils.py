@@ -26,7 +26,7 @@ def test_pyinstaller_datas():
         for path, dst in datas
     ]
 
-    datas = [(p, d) for p, d in datas if "web/static" not in d and "vis/static" not in d]
+    datas = [(p, d) for p, d in datas]
 
     expected_datas = [
         (
